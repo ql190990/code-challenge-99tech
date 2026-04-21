@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: problem5-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: problem5
+    ports:
+      # Mapped to 5433 on the host so this container does not clash with a
+      # local PostgreSQL that already binds 5432. Adjust the left side of
+      # the mapping to match whatever port you expose in DATABASE_URL.
+      - "5433:5432"
+    volumes:
+      - problem5_pg_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d problem5"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  problem5_pg_data:
+    name: problem5_pg_data

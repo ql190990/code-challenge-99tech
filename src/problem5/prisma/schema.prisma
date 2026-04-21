@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  // `price` uses Float for developer ergonomics. For real money arithmetic
+  // a production build should migrate to `Decimal` or store minor units
+  // as `Int` (cents) to avoid IEEE-754 rounding error.
+  price       Float
+  category    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // `name` is deliberately unindexed: `contains` uses a leading wildcard,
+  // which cannot use a plain btree index on PostgreSQL. For large
+  // catalogues, add `CREATE EXTENSION pg_trgm` and a GIN index on
+  // `name` with `gin_trgm_ops` — this is out of scope here.
+  @@index([category, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
