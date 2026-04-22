@@ -9,6 +9,8 @@ build/
 .env
 .env.local
 .env.*.local
+.env.docker
+.env.production
 
 # Logs
 *.log

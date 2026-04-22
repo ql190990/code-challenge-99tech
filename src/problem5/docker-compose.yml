@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: problem5-postgres
+    container_name: problem5-postgres-dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -9,11 +9,11 @@ services:
       POSTGRES_DB: problem5
     ports:
       # Mapped to 5433 on the host so this container does not clash with a
-      # local PostgreSQL that already binds 5432. Adjust the left side of
-      # the mapping to match whatever port you expose in DATABASE_URL.
+      # local PostgreSQL that may already bind 5432. Internal cross-service
+      # communication uses the default PostgreSQL port 5432.
       - "5433:5432"
     volumes:
-      - problem5_pg_data:/var/lib/postgresql/data
+      - problem5_pg_data_dev:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d problem5"]
@@ -21,6 +21,35 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: problem5-api-dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/problem5?schema=public
+      NODE_ENV: development
+      PORT: 3000
+    volumes:
+      # Mount source code for hot reload. The container runs ts-node-dev
+      # which watches these paths and restarts the process on changes.
+      - ./src:/app/src:delegated
+      - ./prisma:/app/prisma:delegated
+      - ./package.json:/app/package.json:delegated
+      - ./package-lock.json:/app/package-lock.json:delegated
+      - ./tsconfig.json:/app/tsconfig.json:delegated
+      # Anonymous volume shadows the host's node_modules, preserving the
+      # container's linux-amd64 binaries compiled during the build.
+      - /app/node_modules
+
 volumes:
-  problem5_pg_data:
-    name: problem5_pg_data
+  problem5_pg_data_dev:
+    name: problem5_pg_data_dev

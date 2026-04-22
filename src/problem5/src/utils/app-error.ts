@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'NOT_FOUND'
   | 'BAD_REQUEST'
+  | 'PAYLOAD_TOO_LARGE'
   | 'INTERNAL_SERVER_ERROR';
 
 export class AppError extends Error {

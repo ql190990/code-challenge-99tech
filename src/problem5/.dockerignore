@@ -1,0 +1,47 @@
+# Dependencies / build output — rebuilt inside the image.
+node_modules
+dist
+coverage
+.nyc_output
+
+# Environment secrets / local DB state — never bake into an image.
+.env
+.env.local
+.env.*.local
+*.db
+*.db-journal
+prisma/*.db
+prisma/*.db-journal
+
+# Version control + CI metadata.
+.git
+.gitignore
+.gitattributes
+.github
+
+# Editor / OS artefacts.
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Developer-only artefacts.
+tests
+**/*.test.ts
+.full-review
+.full-review.*
+README.md
+postman
+spec.md
+openapi.yaml
+
+# Logs.
+*.log
+npm-debug.log*
+
+# Docker self.
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.prod.yml
+docker

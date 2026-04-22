@@ -1,0 +1,880 @@
+{
+  "info": {
+    "name": "Problem 5 — Product CRUD API",
+    "description": "End-to-end Postman collection for the Problem 5 Product CRUD service (Express + TypeScript + Prisma + PostgreSQL).\n\n## How to use\n\n1. Start the server: `docker compose up -d && npm run dev` (see project README).\n2. Import this collection into Postman.\n3. Import `problem5.postman_environment.json` (or set the `baseUrl` collection variable).\n4. Open the **Smoke Test Flow** folder and click **Run** in the Collection Runner — it exercises the happy path end-to-end and captures `productId` for downstream requests.\n5. The remaining folders cover validation/404/edge-case scenarios and can be run individually or as a whole.\n\n## Conventions\n\n- `{{baseUrl}}` defaults to `http://localhost:3000`.\n- `{{productId}}` is populated by the **Smoke Test Flow** > *Create product* step.\n- `{{unknownId}}` is a well-formed CUID guaranteed not to exist.\n- `{{malformedId}}` is intentionally invalid to exercise the schema-level 400.\n- Every request has a Tests script asserting the expected status code and shape; the Collection Runner shows pass/fail.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "productId", "value": "", "type": "string" },
+    { "key": "unknownId", "value": "cjld2cjxh0000qzrmn831i7rn", "type": "string" },
+    { "key": "malformedId", "value": "not-a-cuid", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00 — Smoke Test Flow",
+      "description": "Ordered happy-path flow. Run this folder via the Collection Runner to exercise the full create → read → update → delete lifecycle. The Create step captures `productId` into a collection variable for the subsequent steps.",
+      "item": [
+        {
+          "name": "1. Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('envelope.success === true', () => pm.expect(json.success).to.eql(true));",
+                  "pm.test('data.status === ok', () => pm.expect(json.data.status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Create product (captures productId)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Smoke Mechanical Keyboard\",\n  \"description\": \"Hot-swappable 75% layout, used by the smoke flow\",\n  \"price\": 149.99,\n  \"category\": \"peripherals\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('envelope.success === true', () => pm.expect(json.success).to.eql(true));",
+                  "pm.test('data.id is a string', () => pm.expect(json.data.id).to.be.a('string'));",
+                  "pm.test('createdAt is ISO string', () => pm.expect(json.data.createdAt).to.match(/^\\d{4}-\\d{2}-\\d{2}T/));",
+                  "pm.collectionVariables.set('productId', json.data.id);",
+                  "console.log('Captured productId:', json.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Get product by captured id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('id matches captured productId', () => pm.expect(json.data.id).to.eql(pm.collectionVariables.get('productId')));",
+                  "pm.test('name === Smoke Mechanical Keyboard', () => pm.expect(json.data.name).to.eql('Smoke Mechanical Keyboard'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Patch price (partial update)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"price\": 129.99 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('price updated to 129.99', () => pm.expect(json.data.price).to.eql(129.99));",
+                  "pm.test('name preserved (partial update)', () => pm.expect(json.data.name).to.eql('Smoke Mechanical Keyboard'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Delete and verify 404 on subsequent get",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 204', () => pm.expect(pm.response.code).to.eql(204));",
+                  "pm.test('body is empty', () => pm.expect(pm.response.text()).to.eql(''));",
+                  "// Follow-up GET in this same script to confirm the row is gone.",
+                  "pm.sendRequest({",
+                  "  url: pm.collectionVariables.get('baseUrl') + '/api/products/' + pm.collectionVariables.get('productId'),",
+                  "  method: 'GET'",
+                  "}, (err, res) => {",
+                  "  pm.test('subsequent GET returns 404', () => pm.expect(res.code).to.eql(404));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Health",
+      "item": [
+        {
+          "name": "GET /api/health (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('success === true', () => pm.expect(json.success).to.eql(true));",
+                  "pm.test('data.status === ok', () => pm.expect(json.data.status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Products | Create",
+      "item": [
+        {
+          "name": "Create — valid full body (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Trackball Mouse\",\n  \"description\": \"Ergonomic trackball with 4 programmable buttons\",\n  \"price\": 89.50,\n  \"category\": \"peripherals\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('success === true', () => pm.expect(json.success).to.eql(true));",
+                  "pm.test('id is a non-empty string', () => pm.expect(json.data.id).to.be.a('string').and.to.have.length.greaterThan(0));",
+                  "pm.test('createdAt is ISO string', () => pm.expect(json.data.createdAt).to.match(/^\\d{4}-\\d{2}-\\d{2}T/));",
+                  "pm.test('updatedAt is ISO string', () => pm.expect(json.data.updatedAt).to.match(/^\\d{4}-\\d{2}-\\d{2}T/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — minimal body without description (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Desk Lamp\",\n  \"price\": 39.99,\n  \"category\": \"lighting\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('description is null when omitted', () => pm.expect(json.data.description).to.be.null);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — empty body (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('success === false', () => pm.expect(json.success).to.eql(false));",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('details lists missing fields', () => pm.expect(json.error.details.fieldErrors).to.have.property('name'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — negative price (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Negative Price Test\",\n  \"price\": -10,\n  \"category\": \"test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('price is the offending field', () => pm.expect(json.error.details.fieldErrors).to.have.property('price'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — empty name (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"price\": 10,\n  \"category\": \"test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('name is the offending field', () => pm.expect(json.error.details.fieldErrors).to.have.property('name'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — wrong types (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": 123,\n  \"price\": \"not a number\",\n  \"category\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — extra unknown field (400 — Zod strict mode)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Strict Test\",\n  \"price\": 10,\n  \"category\": \"test\",\n  \"unexpectedField\": \"should be rejected\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create — malformed JSON body (400 BAD_REQUEST)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ this is not valid json",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400 (not 500)', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === BAD_REQUEST', () => pm.expect(json.error.code).to.eql('BAD_REQUEST'));",
+                  "pm.test('message mentions Malformed JSON', () => pm.expect(json.error.message.toLowerCase()).to.include('malformed json'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Products | List",
+      "item": [
+        {
+          "name": "List — defaults (page=1, limit=10) (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('success === true', () => pm.expect(json.success).to.eql(true));",
+                  "pm.test('data is array', () => pm.expect(json.data).to.be.an('array'));",
+                  "pm.test('meta.page === 1', () => pm.expect(json.meta.page).to.eql(1));",
+                  "pm.test('meta.limit === 10', () => pm.expect(json.meta.limit).to.eql(10));",
+                  "pm.test('meta.total >= 0', () => pm.expect(json.meta.total).to.be.at.least(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List — filter by category (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?category=peripherals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [{ "key": "category", "value": "peripherals" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('every item has category=peripherals (when present)', () => {",
+                  "  json.data.forEach(p => pm.expect(p.category).to.eql('peripherals'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List — filter by name (case-insensitive contains, 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?name=keyboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [{ "key": "name", "value": "keyboard" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('every result name contains keyboard (case-insensitive, when present)', () => {",
+                  "  json.data.forEach(p => pm.expect(p.name.toLowerCase()).to.include('keyboard'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List — combined filters + pagination (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?category=peripherals&name=mouse&page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [
+                { "key": "category", "value": "peripherals" },
+                { "key": "name", "value": "mouse" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('meta.limit === 5', () => pm.expect(json.meta.limit).to.eql(5));",
+                  "pm.test('data.length <= 5', () => pm.expect(json.data.length).to.be.at.most(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List — invalid page (non-numeric) (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?page=abc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [{ "key": "page", "value": "abc" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List — limit above max=100 (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?limit=500",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [{ "key": "limit", "value": "500" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List — page=0 (below min) (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?page=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [{ "key": "page", "value": "0" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Products | Get by ID",
+      "item": [
+        {
+          "name": "Get — unknown well-formed CUID (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{unknownId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{unknownId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === NOT_FOUND', () => pm.expect(json.error.code).to.eql('NOT_FOUND'));",
+                  "pm.test('message mentions Product', () => pm.expect(json.error.message.toLowerCase()).to.include('product'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get — malformed id (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{malformedId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{malformedId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Products | Update (PATCH)",
+      "item": [
+        {
+          "name": "Patch — empty body (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/api/products/{{unknownId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{unknownId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('message mentions at least one field', () => pm.expect(JSON.stringify(json)).to.match(/at least one|one field/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patch — unknown id (404 NOT_FOUND)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"price\": 99.99 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{unknownId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{unknownId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === NOT_FOUND', () => pm.expect(json.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patch — malformed id (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"price\": 10 }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{malformedId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{malformedId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patch — extra unknown field (400 strict)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"price\": 10, \"unknownField\": true }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{unknownId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{unknownId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Products | Delete",
+      "item": [
+        {
+          "name": "Delete — unknown id (404 NOT_FOUND)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{unknownId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{unknownId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === NOT_FOUND', () => pm.expect(json.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete — malformed id (400 VALIDATION_ERROR)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{malformedId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{malformedId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — Negative cases | Misc",
+      "item": [
+        {
+          "name": "Unknown route (404 NOT_FOUND)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/does-not-exist", "host": ["{{baseUrl}}"], "path": ["api", "does-not-exist"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === NOT_FOUND', () => pm.expect(json.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wrong HTTP verb on collection (404 NOT_FOUND)",
+          "description": "Express + the notFound handler returns 404 NOT_FOUND for an unmapped (verb, path) pair (e.g. PUT on /api/products is not registered — only POST, GET, PATCH on :id, DELETE on :id are).",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"name\": \"x\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404 (verb not registered on this path)', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('error.code === NOT_FOUND', () => pm.expect(json.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Body exceeds 16kb limit (413 PAYLOAD_TOO_LARGE)",
+          "description": "Body limit is 16 KB per src/app.ts. A description larger than that triggers express.json's PayloadTooLargeError, surfaced as 413 by Express's default error handler.",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": {
+              "mode": "raw",
+              "raw": "// pre-request script generates a 17 KB body and stores it in pm.variables; see Pre-request Script tab",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate a payload that exceeds the 16 KB body-parser limit.",
+                  "const big = 'x'.repeat(17 * 1024);",
+                  "const body = JSON.stringify({ name: 'Body Limit Test', price: 1, category: 'test', description: big });",
+                  "pm.request.body.update({ mode: 'raw', raw: body, options: { raw: { language: 'json' } } });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 413 (body too large)', () => pm.expect(pm.response.code).to.eql(413));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,488 @@
+openapi: 3.0.3
+info:
+  title: Problem 5 — Product CRUD API
+  version: 1.0.0
+  description: |
+    CRUD REST API for managing products, built with Express + TypeScript + Prisma on
+    PostgreSQL. Every response follows a consistent envelope so clients can rely on
+    a single success/error discriminator.
+
+    Source repository: `src/problem5/` of the 99Tech Backend Developer code challenge.
+    See the top-level `README.md` for Quick Start, Postman collection, and operational
+    scope.
+  contact:
+    name: Backend Developer candidate — Quan Le
+  license:
+    name: For evaluation only (code-challenge submission).
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server (bind with `npm run dev`).
+
+tags:
+  - name: Health
+    description: Liveness / readiness probes.
+  - name: Products
+    description: CRUD operations on the `Product` resource.
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Lightweight readiness probe. Returns immediately without touching the database.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                ok:
+                  value:
+                    success: true
+                    data:
+                      status: ok
+
+  /api/products:
+    post:
+      tags: [Products]
+      summary: Create a product
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductInput'
+            examples:
+              full:
+                summary: All fields supplied.
+                value:
+                  name: Mechanical Keyboard
+                  description: Hot-swappable 75% layout
+                  price: 149.99
+                  category: peripherals
+              minimal:
+                summary: Description omitted — it is optional.
+                value:
+                  name: Desk Lamp
+                  price: 39.99
+                  category: lighting
+      responses:
+        '201':
+          description: Product created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags: [Products]
+      summary: List products
+      description: |
+        Supports basic filters:
+        - `name` — case-insensitive substring match (compiles to `ILIKE` on PostgreSQL).
+        - `category` — exact match.
+        Pagination via `page` (default `1`) and `limit` (default `10`, max `100`).
+      operationId: listProducts
+      parameters:
+        - $ref: '#/components/parameters/QueryName'
+        - $ref: '#/components/parameters/QueryCategory'
+        - $ref: '#/components/parameters/QueryPage'
+        - $ref: '#/components/parameters/QueryLimit'
+      responses:
+        '200':
+          description: Paginated list of products.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListEnvelope'
+              examples:
+                page1:
+                  value:
+                    success: true
+                    data:
+                      - id: clv8a3kx10000u7o7m5b9dq4j
+                        name: Mechanical Keyboard
+                        description: Hot-swappable 75% layout
+                        price: 149.99
+                        category: peripherals
+                        createdAt: '2026-04-21T10:00:00.000Z'
+                        updatedAt: '2026-04-21T10:00:00.000Z'
+                    meta:
+                      page: 1
+                      limit: 10
+                      total: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/products/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PathProductId'
+
+    get:
+      tags: [Products]
+      summary: Get a product by id
+      operationId: getProduct
+      responses:
+        '200':
+          description: Product found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags: [Products]
+      summary: Partially update a product
+      description: |
+        Partial update: send only the fields you want to change. At least one field
+        is required. Uses `PATCH` (not `PUT`) because the body is a merge, not a
+        full replacement — matches RFC 7231 §4.3.4.
+      operationId: updateProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductInput'
+            examples:
+              priceOnly:
+                summary: Price-only update is typical.
+                value:
+                  price: 129.99
+              multipleFields:
+                summary: Several fields may be updated at once.
+                value:
+                  name: Mechanical Keyboard (v2)
+                  price: 159.99
+      responses:
+        '200':
+          description: Product updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags: [Products]
+      summary: Delete a product
+      operationId: deleteProduct
+      responses:
+        '204':
+          description: Product deleted. No response body.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    PathProductId:
+      name: id
+      in: path
+      required: true
+      description: Product CUID (validated with `z.string().cuid()`).
+      schema:
+        type: string
+        pattern: '^c[^\s-]{8,}$'
+        example: clv8a3kx10000u7o7m5b9dq4j
+    QueryName:
+      name: name
+      in: query
+      required: false
+      description: Substring match on `name`, case-insensitive.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        example: keyboard
+    QueryCategory:
+      name: category
+      in: query
+      required: false
+      description: Exact match on `category`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+        example: peripherals
+    QueryPage:
+      name: page
+      in: query
+      required: false
+      description: 1-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    QueryLimit:
+      name: limit
+      in: query
+      required: false
+      description: Items per page. Capped at 100.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+
+  schemas:
+    Product:
+      type: object
+      required: [id, name, description, price, category, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: CUID.
+          example: clv8a3kx10000u7o7m5b9dq4j
+        name:
+          type: string
+          example: Mechanical Keyboard
+        description:
+          type: string
+          nullable: true
+          example: Hot-swappable 75% layout
+        price:
+          type: number
+          format: double
+          description: Stored as PostgreSQL `DOUBLE PRECISION`. See README data-model notes.
+          example: 149.99
+        category:
+          type: string
+          example: peripherals
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-04-21T10:00:00.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-04-21T10:00:00.000Z'
+
+    CreateProductInput:
+      type: object
+      required: [name, price, category]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+        price:
+          type: number
+          exclusiveMinimum: 0
+          description: Positive, finite number.
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    UpdateProductInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Partial update — at least one of the fields must be provided.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+        price:
+          type: number
+          exclusiveMinimum: 0
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    PaginationMeta:
+      type: object
+      required: [page, limit, total]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+
+    HealthResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [ok]
+
+    ProductEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/Product'
+
+    ProductListEnvelope:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ErrorCode:
+      type: string
+      description: Stable machine-readable error code. New codes add new values rather than reusing existing ones.
+      enum:
+        - VALIDATION_ERROR
+        - NOT_FOUND
+        - BAD_REQUEST
+        - PAYLOAD_TOO_LARGE
+        - INTERNAL_SERVER_ERROR
+
+    ErrorEnvelope:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+            details:
+              description: Present for `VALIDATION_ERROR` (Zod `flatten()` output). Absent otherwise.
+              type: object
+              additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: |
+        Client error — one of:
+        - `VALIDATION_ERROR` (400): Zod schema rejected the body / query / params. `details` carries field-level failures.
+        - `BAD_REQUEST` (400): malformed JSON body — `Content-Type: application/json` with a non-JSON payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            validation:
+              summary: VALIDATION_ERROR
+              value:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: Validation failed
+                  details:
+                    formErrors: []
+                    fieldErrors:
+                      price: ['Expected number, received string']
+            malformedJson:
+              summary: BAD_REQUEST (malformed JSON)
+              value:
+                success: false
+                error:
+                  code: BAD_REQUEST
+                  message: Malformed JSON body
+
+    NotFound:
+      description: Resource not found. `NOT_FOUND` also covers unmapped routes (e.g. `GET /api/something-else`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            productMissing:
+              value:
+                success: false
+                error:
+                  code: NOT_FOUND
+                  message: Product not found
+
+    PayloadTooLarge:
+      description: "Request body exceeds the 16 KB limit configured on `express.json({ limit: '16kb' })`."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            tooLarge:
+              value:
+                success: false
+                error:
+                  code: PAYLOAD_TOO_LARGE
+                  message: Request body exceeds the 16KB limit
+
+    InternalServerError:
+      description: Unhandled exception. The server logs the full stack; clients get a generic envelope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            generic:
+              value:
+                success: false
+                error:
+                  code: INTERNAL_SERVER_ERROR
+                  message: An unexpected error occurred
