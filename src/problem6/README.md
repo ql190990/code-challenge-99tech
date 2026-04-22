@@ -363,7 +363,7 @@ sequenceDiagram
     R-->>API: {userId, actionType, maxDelta}
     API->>API: Validate token.userId == JWT.sub<br/>delta in allowed set, delta <= maxDelta
     API->>R: DEL action-token:<token> (consume)
-    API->>PG: BEGIN; UPDATE users SET score = score + :delta<br/>WHERE id = :userId RETURNING score;<br/>INSERT INTO outbox (event)
+    API->>PG: BEGIN<br/>UPDATE users SET score = score + :delta WHERE id = :userId RETURNING score<br/>INSERT INTO outbox (event)<br/>COMMIT
     PG-->>API: newScore, outbox id
     API->>PG: COMMIT
     API->>R: ZINCRBY leaderboard:global :delta :userId
