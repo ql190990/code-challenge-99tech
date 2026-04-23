@@ -4,19 +4,26 @@ services:
     container_name: problem5-postgres-dev
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: problem5
+      # Dev: all variables fall back to sane defaults when not set. To
+      # override, either export them in the shell or run:
+      #   docker compose --env-file .env.docker up -d
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-problem5}
     ports:
       # Mapped to 5433 on the host so this container does not clash with a
       # local PostgreSQL that may already bind 5432. Internal cross-service
       # communication uses the default PostgreSQL port 5432.
-      - "5433:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - problem5_pg_data_dev:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d problem5"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-problem5}"]
+      # start_period covers the first-run init sequence: postgres boots,
+      # runs /docker-entrypoint-initdb.d/*.sql, shuts down, then restarts.
+      # During that window pg_isready flaps, so suppress failure counting.
+      start_period: 30s
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,12 +39,16 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "3000:3000"
-      - "9229:9229"
+      - "${API_HOST_PORT:-3000}:${PORT:-3000}"
+      - "${DEBUG_HOST_PORT:-9229}:9229"
+    env_file:
+      # Optional in dev — missing file is tolerated and defaults below apply.
+      - path: .env.docker
+        required: false
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/problem5?schema=public
-      NODE_ENV: development
-      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/problem5?schema=public}
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-3000}
     volumes:
       # Mount source code for hot reload. The container runs ts-node-dev
       # which watches these paths and restarts the process on changes.

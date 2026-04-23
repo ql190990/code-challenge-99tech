@@ -4,20 +4,27 @@ services:
     container_name: problem5-postgres-prod
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: problem5
+      # Prod: variables are REQUIRED. Compose fails fast with a clear error
+      # if any are missing. Run with:
+      #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set in .env.production}
     ports:
       # In real production, comment this out and use a managed database
       # service (RDS, Cloud SQL, etc.). The port mapping is kept here so
       # `docker compose -f docker-compose.prod.yml up -d` works out of the
       # box for local testing.
-      - "5433:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - problem5_pg_data_prod:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d problem5"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # start_period covers the first-run init sequence: postgres boots,
+      # runs /docker-entrypoint-initdb.d/*.sql, shuts down, then restarts.
+      # During that window pg_isready flaps, so suppress failure counting.
+      start_period: 30s
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,9 +40,16 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "${API_HOST_PORT:-3000}:${PORT:?PORT must be set in .env.production}"
     env_file:
-      - .env.production
+      # Required in prod — compose refuses to start if the file is missing.
+      - path: .env.production
+        required: true
+    environment:
+      # Fail fast when any critical variable is missing from .env.production.
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env.production}
+      NODE_ENV: ${NODE_ENV:?NODE_ENV must be set in .env.production}
+      PORT: ${PORT}
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:'+(process.env.PORT||3000)+'/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s

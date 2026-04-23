@@ -26,11 +26,14 @@ command brings up PostgreSQL and the app, with source-code hot reload baked
 in:
 
 ```bash
-# 1. Copy the dev env template for the compose network (postgres:5432)
+# 1. (Optional) Copy the dev env template. docker-compose.yml ships sane
+#    defaults via `${VAR:-default}` substitution and marks env_file as
+#    `required: false`, so this step can be skipped for a quick spin-up.
 cp .env.docker.example .env.docker
 
-# 2. Build the dev image and start both services in the background
-docker compose up -d --build
+# 2. Build the dev image and start both services in the background.
+#    Add `--env-file .env.docker` to override the built-in defaults.
+docker compose --env-file .env.docker up -d --build
 
 # 3. Apply the initial migration — mandatory on a fresh volume
 docker compose exec api npm run db:migrate -- --name init
@@ -76,7 +79,7 @@ compose) is a matter of stopping one and starting the other. Do not run
 both at the same time — both bind to host port `3000`.
 
 > **Reviewer shortcut — 30-second smoke test.**
-> Once the server is up (either via `docker compose up -d --build` or the host-level path above), import [`postman/problem5.postman_collection.json`](./postman/problem5.postman_collection.json) and [`postman/problem5.postman_environment.json`](./postman/problem5.postman_environment.json) into Postman and run the `00 — Smoke Test Flow` folder via the Collection Runner. Five requests execute end-to-end (health → create → get → patch → delete → 404 verify) and every assertion passes on a clean DB.
+> Once the server is up (either via `docker compose --env-file .env.docker up -d --build` or the host-level path above), import [`postman/problem5.postman_collection.json`](./postman/problem5.postman_collection.json) and [`postman/problem5.postman_environment.json`](./postman/problem5.postman_environment.json) into Postman and run the `00 — Smoke Test Flow` folder via the Collection Runner. Five requests execute end-to-end (health → create → get → patch → delete → 404 verify) and every assertion passes on a clean DB.
 >
 > CLI equivalent: `npx newman run postman/problem5.postman_collection.json -e postman/problem5.postman_environment.json`. See [`postman/README.md`](./postman/README.md) for the full folder map (33 requests / 85 assertions covering happy paths, validation errors, 404s, malformed JSON, oversized bodies, unmapped verbs).
 
@@ -90,12 +93,19 @@ and debugger support, and one for production with a compiled image and optimized
 The development compose brings up both PostgreSQL and the Express app with source-code
 hot reload and Node debugger support.
 
+`docker-compose.yml` uses `${VAR:-default}` substitution for every setting
+and declares `env_file: .env.docker` with `required: false`, so the stack
+boots with sane defaults even when `.env.docker` is absent. Pass
+`--env-file .env.docker` to override any default (DB credentials, host
+port mappings, etc.).
+
 ```bash
-# 1. Copy the dev environment template
+# 1. (Optional) Copy the dev environment template
 cp .env.docker.example .env.docker
 
-# 2. Build the dev image and start both services
-docker compose up -d --build
+# 2. Build the dev image and start both services.
+#    Drop `--env-file .env.docker` to use the built-in defaults.
+docker compose --env-file .env.docker up -d --build
 
 # 3. Apply the initial migration (first run only — Prisma stores its
 #    history in prisma/migrations; subsequent `compose up` skips this).
@@ -131,25 +141,31 @@ The production compose builds a minimal image from the production Dockerfile tar
 requires externally-supplied environment configuration, and includes PostgreSQL for
 convenience (which you can replace with a managed database in real deployments).
 
+`docker-compose.prod.yml` uses `${VAR:?error}` substitution and declares
+`env_file: .env.production` with `required: true`, so Compose **refuses
+to start** with a clear error message if `.env.production` is missing
+or any required variable is unset. Every command below therefore passes
+`--env-file .env.production`.
+
 ```bash
 # 1. Copy the production environment template and edit it
 cp .env.production.example .env.production
 # Update DATABASE_URL to point at your managed database (RDS, Cloud SQL, etc.)
 
 # 2. Build and start the production stack
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 
 # 3. Apply migrations against the target database (first run only).
 #    For production pipelines this should happen from a one-shot job,
 #    not from inside the long-running container.
-docker compose -f docker-compose.prod.yml exec api npx prisma migrate deploy
+docker compose -f docker-compose.prod.yml --env-file .env.production exec api npx prisma migrate deploy
 
 # 4. Check logs and verify health
-docker compose -f docker-compose.prod.yml logs -f api
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f api
 curl http://localhost:3000/api/health
 
 # 5. Tear down
-docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml --env-file .env.production down
 ```
 
 **No hot reload in production:** The app runs compiled JavaScript (`dist/`) that was
